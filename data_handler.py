@@ -11,10 +11,10 @@ import random
 engineName = "Trafo X"
 teleURL = 'http://192.168.4.120:1444/api/transformer/sendNotificationToTelegramGroup'
 progStat = True
-debugMsg = True
+debugMsg = False
 infoMsg = True
 
-exhibitStat = True
+exhibitStat = False
 OLTCstat = False
 pressureStat = False
 tempStat = True
@@ -179,16 +179,14 @@ def main():
                 client.write_coil(i, False, slave = 1)
                 
         if debugMsg == True: print("1D|4a Read Modbus Slave")
-        getTemp = client.read_holding_registers(4, 3, slave = 3)
-        getElect1 = client.read_holding_registers(0, 29, slave = 2)
-        getElect2 = client.read_holding_registers(46, 5, slave = 2)
-        getElect3 = client.read_holding_registers(800, 6, slave = 2)
-        getHarmV = client.read_holding_registers(806, 90, slave = 2)
-        getHarmI = client.read_holding_registers(896, 90, slave = 2)
-        getH2 = client.read_holding_registers(0, 1, slave = 4)
-        getMoist = client.read_input_registers(0, 3, slave = 5)
+        getElect1 = client.read_holding_registers(2999, 8, slave = 2)
+        getElect2 = client.read_holding_registers(3019, 14, slave = 2)
+        getElect3 = client.read_holding_registers(3053, 24, slave = 2)
+        getElect4 = client.read_holding_registers(3077, 18, slave = 2)
+        getElect5 = client.read_holding_registers(3213, 20, slave = 2)
+        getElect6 = client.read_holding_registers(21299, 24, slave = 2)
         if debugMsg == True: print("1D|4b Parse Data")
-        inputData = dataParser(exhibitStat, getTemp, getElect1, getElect2, getElect3, getH2, getMoist, dataLen, CTratio, PTratio)
+        inputData = dataParser(exhibitStat, getElect1, getElect2, getElect3, getElect4, getElect5, dataLen)
         
         if debugMsg == True: print("1D|5 Read Input IO")
         oilLevelAlarm = inputIO[4][2]
@@ -255,8 +253,11 @@ def main():
             inputData[i + 40] = (round((inputData[39] + (deltaH1[i] - deltaH2[i])) * 100))/100
         
         if debugMsg == True: print("1D|7 Parse Harm, Update DB")
-        inputHarmonicV = harmonicParser(getHarmV)
-        inputHarmonicI = harmonicParser(getHarmI)
+        outputList = [[0]*16, [0]*16, [0]*16]
+        outputList[0][0] = 100
+        outputList[0][1] = 100
+        outputList[0][2] = 100
+        inputHarmonicV = inputHarmonicI = outputList
         cursor.execute(sqlLibrary.sqlUpdateVHarm1, inputHarmonicV[0])
         cursor.execute(sqlLibrary.sqlUpdateVHarm2, inputHarmonicV[1])
         cursor.execute(sqlLibrary.sqlUpdateVHarm3, inputHarmonicV[2])

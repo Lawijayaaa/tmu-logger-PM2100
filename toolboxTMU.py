@@ -3,6 +3,7 @@ from threading import Timer, Lock
 import json
 import math
 import random
+import struct
 
 class parameter:
     def __init__(self, name, value, isWatched, highAlarm, lowAlarm, highTrip, lowTrip, status, trafoStat):
@@ -194,54 +195,79 @@ def initParameter(dataSet, inputData, trafoSetting, trafoData, tripSetting, data
                     dataSet[i].trafoStat = 0
     return(dataSet)
 
-def dataParser(exhibitStat, getTemp, getElect1, getElect2, getElect3, getH2, getMoist, dataLen, CTratio, PTratio):
+def dataParser(exhibitStat, getElect1, getElect2, getElect3, getElect4, getElect5, getElect6, dataLen):
     outputData = [0]*dataLen
     #parse getTemp
     try:
-        outputData[36:39] = [(0 if member > 2400 else member/10) for member in getTemp.registers] #Busbar Temp
+        outputData[36:39] = 0 #Busbar Temp
     except:
         pass
     #parse getElect1
     try:
-        for i in range(0, 3):
-            outputData[i] = (PTratio * getElect1.registers[i])/100 #Voltage Phase Neutral
-            outputData[i + 3] = (PTratio * getElect1.registers[i+3])/100 #Voltage Phase Phase
-            outputData[i + 6] = (CTratio * getElect1.registers[i+6])/1000 #Current
-            outputData[i + 29] = (signedInt16Handler(getElect1.registers[i+21]))/1000 #PF
-            outputData[i + 17] = (CTratio * PTratio * signedInt16Handler(getElect1.registers[i+15]))/10 #P
-            outputData[i + 21] = (CTratio * PTratio * signedInt16Handler(getElect1.registers[i+18]))/10 #Q
-        outputData[10] = (CTratio * getElect1.registers[9])/1000 #Neutral Current
-        outputData[20] = (CTratio * PTratio * (signedInt32Handler(getElect1.registers[10:12]))[0])/10 #Psig
-        outputData[24] = (CTratio * PTratio * (signedInt32Handler(getElect1.registers[12:14]))[0])/10 #Qsig
-        outputData[33] = (getElect1.registers[24])/100 #Frequency 
-        outputData[34] = (unsignedInt32Handler(getElect1.registers[25:27]))/10 #kWh
-        outputData[35] = (unsignedInt32Handler(getElect1.registers[27:]))/10 #kVARh
-        outputData[32] = (outputData[29] + outputData[30] + outputData[31])/3 #Average PF
+        #Current
+        outputData[6] = round(floating32Handler(getElect1.registers[0], getElect1.registers[1], byte_order='big'), 3) #Phase U
+        outputData[7] = round(floating32Handler(getElect1.registers[2], getElect1.registers[3], byte_order='big'), 3) #Phase V
+        outputData[8] = round(floating32Handler(getElect1.registers[4], getElect1.registers[5], byte_order='big'), 3) #Phase W
+        outputData[10] = round(floating32Handler(getElect1.registers[6], getElect1.registers[7], byte_order='big'), 3) #Phase N
+        
+        #Voltage Phase to Phase
+        outputData[3] = round(floating32Handler(getElect2.registers[0], getElect2.registers[1], byte_order='big'), 3) #Phase U
+        outputData[4] = round(floating32Handler(getElect2.registers[2], getElect2.registers[3], byte_order='big'), 3) #Phase V
+        outputData[5] = round(floating32Handler(getElect2.registers[4], getElect2.registers[5], byte_order='big'), 3) #Phase W
+
+        #Voltage Phase to Neutral
+        outputData[0] = round(floating32Handler(getElect2.registers[8], getElect2.registers[9], byte_order='big'), 3) #Phase U
+        outputData[1] = round(floating32Handler(getElect2.registers[10], getElect2.registers[11], byte_order='big'), 3) #Phase V
+        outputData[2] = round(floating32Handler(getElect2.registers[12], getElect2.registers[13], byte_order='big'), 3) #Phase W
+
+        #Active Power
+        outputData[17] = 1000 * round(floating32Handler(getElect3.registers[0], getElect3.registers[1], byte_order='big'), 6) #Phase U
+        outputData[18] = 1000 * round(floating32Handler(getElect3.registers[2], getElect3.registers[3], byte_order='big'), 6) #Phase V
+        outputData[19] = 1000 * round(floating32Handler(getElect3.registers[4], getElect3.registers[5], byte_order='big'), 6) #Phase W
+        outputData[20] = 1000 * round(floating32Handler(getElect3.registers[6], getElect3.registers[7], byte_order='big'), 6) #Total
+        
+        #Reactive Power
+        outputData[21] = 1000 * round(floating32Handler(getElect3.registers[8], getElect3.registers[9], byte_order='big'), 6) #Phase U
+        outputData[22] = 1000 * round(floating32Handler(getElect3.registers[10], getElect3.registers[11], byte_order='big'), 6) #Phase V
+        outputData[23] = 1000 * round(floating32Handler(getElect3.registers[12], getElect3.registers[13], byte_order='big'), 6) #Phase W
+        outputData[24] = 1000 * round(floating32Handler(getElect3.registers[14], getElect3.registers[15], byte_order='big'), 6) #Total
+
+        #Apparent Power
+        outputData[25] = 1000 * round(floating32Handler(getElect3.registers[16], getElect3.registers[17], byte_order='big'), 6) #Phase U
+        outputData[26] = 1000 * round(floating32Handler(getElect3.registers[18], getElect3.registers[19], byte_order='big'), 6) #Phase V
+        outputData[27] = 1000 * round(floating32Handler(getElect3.registers[20], getElect3.registers[21], byte_order='big'), 6) #Phase W
+        outputData[28] = 1000 * round(floating32Handler(getElect3.registers[22], getElect3.registers[23], byte_order='big'), 6) #Total
+
+        #Power Factor & Frequency
+        outputData[29] = round(floating32Handler(getElect4.registers[0], getElect4.registers[1], byte_order='big'), 3) #Phase U
+        outputData[30] = round(floating32Handler(getElect4.registers[2], getElect4.registers[3], byte_order='big'), 3) #Phase V
+        outputData[31] = round(floating32Handler(getElect4.registers[4], getElect4.registers[5], byte_order='big'), 3) #Phase W
+        outputData[32] = round(floating32Handler(getElect4.registers[6], getElect4.registers[7], byte_order='big'), 3) #Total
+        outputData[28] = round(floating32Handler(getElect4.registers[16], getElect4.registers[17], byte_order='big'), 3) #Frequency
+
+        #kWh & kVARh
+        outputData[34] = (signedInt64Handler(getElect5.registers[0], getElect5.registers[1], getElect5.registers[2], getElect5.registers[3]))/1000 #kWh
+        outputData[35] = (signedInt64Handler(getElect5.registers[16], getElect5.registers[17], getElect5.registers[18], getElect5.registers[19]))/1000 #kVARh
+
         outputData[9] = (outputData[6] + outputData[7] + outputData[8])/3 #Total Current
         outputData[53] = abs(outputData[0] - outputData[1]) #Gap Voltage Un-Vn
         outputData[54] = abs(outputData[1] - outputData[2]) #Gap Voltage Vn-Wn
         outputData[55] = abs(outputData[0] - outputData[2]) #Gap Voltage Un-Wn
     except:
         pass
-    #parse getElect2
+
+    #parse getElect6
     try:
-        for i in range(0, 3):
-            outputData[i + 25] = (CTratio * PTratio * (getElect2.registers[i])/10) #S
-        outputData[28] = (CTratio * PTratio * (unsignedInt32Handler(getElect2.registers[3:]))/10) #Ssig
-    except:
-        pass
-    #parse getElect3
-    try:
-        for i in range(0, 3):
-            outputData[i + 11] = (getElect3.registers[i])/10 #THD Voltage
-            outputData[i + 14] = (getElect3.registers[i+3])/10 #THD Current
-    except:
-        pass
-    #parse getH2 and getMoist
-    try:
-        outputData[51] = getH2.registers[0] #H2 ppm
-        outputData[52] = getMoist.registers[2] #Water Content ppm
-        outputData[39] = (getMoist.registers[0])/10 #Top Oil Temp.
+        #THD Current
+        outputData[14] = round(floating32Handler(getElect6.registers[0], getElect6.registers[1], byte_order='big'), 3) #Phase U
+        outputData[15] = round(floating32Handler(getElect6.registers[2], getElect6.registers[3], byte_order='big'), 3) #Phase V
+        outputData[16] = round(floating32Handler(getElect6.registers[4], getElect6.registers[5], byte_order='big'), 3) #Phase W
+
+        #THD Voltage
+        outputData[11] = round(floating32Handler(getElect6.registers[18], getElect6.registers[19], byte_order='big'), 3) #Phase U
+        outputData[12] = round(floating32Handler(getElect6.registers[20], getElect6.registers[21], byte_order='big'), 3) #Phase V
+        outputData[13] = round(floating32Handler(getElect6.registers[22], getElect6.registers[23], byte_order='big'), 3) #Phase W
+        
     except:
         pass
     
@@ -319,7 +345,19 @@ def harmonicParser(inputArg):
             outputList[i].insert(0, 100)
     except:
         outputList = [[0]*16, [0]*16, [0]*16]
+        outputList[0][0] = 100
+        outputList[0][1] = 100
+        outputList[0][2] = 100
     return outputList
+
+def signedInt64Handler(val1, val2, val3, val4):
+    for v in (val1, val2, val3, val4):
+        if not (0 <= v <= 0xFFFF):
+            raise ValueError(f"Input {v} bukan 16-bit unsigned integer")
+    combined = (val1 << 48) | (val2 << 32) | (val3 << 16) | val4
+    if combined & (1 << 63):
+        combined = combined - (1 << 64)
+    return combined
 
 def signedInt16Handler(data):
     if data > (math.pow(2, 16))/2:
@@ -327,6 +365,18 @@ def signedInt16Handler(data):
     else:
         data = data
     return data
+
+def floating32Handler(high_word, low_word, byte_order='big'):
+    if byte_order == 'big':
+        combined = (high_word << 16) | low_word
+    elif byte_order == 'little':
+        combined = (low_word << 16) | high_word
+    else:
+        raise ValueError("byte_order harus 'big' atau 'little'")
+    
+    bytes_ = combined.to_bytes(4, byteorder='big')
+    float_val = struct.unpack('>f', bytes_)[0]
+    return float_val
 
 def signedInt32Handler(dataset):
     hexData = [hex(member)[2:] for member in dataset]
