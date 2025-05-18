@@ -186,7 +186,7 @@ def main():
         getElect5 = client.read_holding_registers(3213, 20, slave = 2)
         getElect6 = client.read_holding_registers(21299, 24, slave = 2)
         if debugMsg == True: print("1D|4b Parse Data")
-        inputData = dataParser(exhibitStat, getElect1, getElect2, getElect3, getElect4, getElect5, dataLen)
+        inputData = dataParser(exhibitStat, getElect1, getElect2, getElect3, getElect4, getElect5, getElect6, dataLen)
         
         if debugMsg == True: print("1D|5 Read Input IO")
         oilLevelAlarm = inputIO[4][2]
